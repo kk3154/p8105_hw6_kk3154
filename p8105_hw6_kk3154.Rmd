@@ -33,11 +33,94 @@ theme_set(theme_minimal() + theme(legend.position = "bottom"))
 Loading and cleaning the birthweight data.
 
 ```{r}
+bw_df = read_csv(file = "./data/birthweight.csv", show_col_types = FALSE)
+
+bw_df = bw_df %>% 
+  mutate(
+    babysex = factor(babysex, levels = c(1, 2), labels = c("male", "female")), 
+    frace = factor(frace, levels = c(1, 2, 3, 4, 8, 9), labels = c("White", "Black", "Asian", "Puerto Rican", "Other", "Unknown")),
+    malform = factor(malform, levels = c(0, 1), labels = c("absent", "present")), 
+    mrace = factor(mrace, levels = c(1, 2, 3, 4, 8), labels = c("White", "Black", "Asian", "Puerto Rican", "Other")) 
+  )
+
+skimr::skim(bw_df)
+```
+
+Building a linear model (Model 1).
+
+Identifying variables for inclusion by running all bivariable (unadjusted) models and removing variables with a p-value > 0.1 (for categorical variables, remove only if p > 0.1 for all levels). I will also exclude ppwt and mheight since these are presumably already incorporated in the calculation of ppbmi.
+
+```{r}
+predictors = colnames(select(bw_df, -bwt))
+
+unadj_function = function(preds) {
+  form = paste("bwt ~", preds)
+  lm(as.formula(form), data = bw_df)
+}
+
+unadj_models = tibble(
+  names = predictors, 
+  models = map(predictors, unadj_function), 
+  results = map(models, broom::tidy)) %>% 
+  select(names, results) %>% 
+  unnest(results) %>% 
+  filter(term != "(Intercept)") %>% 
+  knitr::kable(digits = 3)
+
+unadj_models
+```
+
+Model 1 will include all predictor variables in the dataset, except for malform, menarche, parity, pnumlbw, and pnumsga.
+
+```{r}
+fit_m1 = lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks + momage + mrace + ppbmi + smoken + wtgain, data = bw_df) %>% 
+  broom::tidy() %>% 
+  knitr::kable(digits = 3)
+
+fit_m1
+```
+
+Plotting residuals against fitted values for Model 1:
+
+```{r}
 
 ```
 
+Comparing Model 1 to two additional models.
 
+* Model 2: Main Effects only (length at birth and gestational age)
 
+* Model 3: Interaction model (head circumference, length, sex + 3-way interaction)
+
+```{r}
+fit_m2 = lm(bwt ~ blength + gaweeks, data = bw_df)
+
+fit_m2 %>% 
+  broom::tidy()
+
+fit_m3 = lm(bwt ~ bhead * blength * babysex, data = bw_df)
+
+fit_m3 %>% 
+  broom::tidy()
+```
+
+## Problem 2 - Bootstrapping Central Park Weather Data
+
+Loading 2017 Central Park weather data.
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
 
 
 
