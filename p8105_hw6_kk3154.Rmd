@@ -154,5 +154,76 @@ weather_df =
   select(name, id, everything())
 ```
 
+5000 bootstrap samples of the data:
 
+```{r}
+boot_sample = function(df) {
+  sample_frac(df, replace = TRUE)
+}
+
+boot_straps = 
+  data_frame(
+    strap_number = 1:5000,
+    strap_sample = rerun(5000, boot_sample(weather_df))
+  )
+```
+
+R-squared distribution and 95% confidence interval:
+
+```{r}
+bootstrap_r2_results = 
+  boot_straps %>% 
+  mutate(
+    models = map(strap_sample, ~lm(tmax ~ tmin, data = .x)), 
+    results = map(models, broom::glance)) %>% 
+  select(-strap_sample, -models) %>% 
+  unnest(results)
+
+bootstrap_r2_results %>% 
+  summarize(r2_mean = mean(r.squared), 
+            r2_lower_limit = quantile(r.squared, 0.025), 
+            r2_upper_limit = quantile(r.squared, 0.975)) %>% 
+  knitr::kable(digits = 3)
+
+bootstrap_r2_results %>% 
+  ggplot(aes(x = r.squared)) + 
+  geom_density()
+```
+
+The distribution of R-squared (model fit) among the 5,000 bootstrapped samples follows an approximately normal distribution centered at 0.91, with a 95% confidence interval of 0.895 - 0.927.
+
+
+log(b0*b1) distribution and 95% confidence interval:
+
+```{r}
+bootstrap_eq_results = 
+  boot_straps %>% 
+  mutate(
+    models = map(strap_sample, ~lm(tmax ~ tmin, data = .x)), 
+    results = map(models, broom::tidy)) %>% 
+  select(-strap_sample, -models) %>% 
+  unnest(results) %>% 
+  mutate(
+    term = ifelse(term == "tmin", "b1", "b0")) %>% 
+  select(strap_number, term, estimate) %>% 
+  pivot_wider(
+    names_from = term, 
+    values_from = estimate
+  ) %>% 
+  mutate(
+    log_b0_b1 = log(b0*b1)
+  )
+
+bootstrap_eq_results %>% 
+  summarize(eq_mean = mean(log_b0_b1), 
+            eq_lower_limit = quantile(log_b0_b1, 0.025), 
+            eq_upper_limit = quantile(log_b0_b1, 0.975)) %>% 
+  knitr::kable(digits = 3)
+
+bootstrap_eq_results %>% 
+  ggplot(aes(x = log_b0_b1)) + 
+  geom_density()
+```
+
+The distribution of the log of the intercept times the tmin coefficient in each bootstrapped sample follows an approximately normal distribution centered at 2.01 with a 95% confidence interval of 1.97 - 2.06.
 
