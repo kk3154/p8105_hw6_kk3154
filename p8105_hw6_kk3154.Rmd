@@ -73,35 +73,67 @@ unadj_models
 Model 1 will include all predictor variables in the dataset, except for malform, menarche, parity, pnumlbw, and pnumsga based on bivariable analyses. I will also exclude ppwt and mheight since these are presumably already incorporated in the calculation of ppbmi.
 
 ```{r}
-fit_m1 = lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks + momage + mrace + ppbmi + smoken + wtgain, data = bw_df) %>% 
+fit_m1 = lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks + momage + mrace + ppbmi + smoken + wtgain, data = bw_df) 
+
+fit_m1 %>% 
   broom::tidy() %>% 
   knitr::kable(digits = 3)
-
-fit_m1
 ```
 
 Plotting residuals against fitted values for Model 1:
 
 ```{r}
-
+bw_df %>% 
+  modelr::add_residuals(fit_m1) %>% 
+  modelr::add_predictions(fit_m1) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() + 
+  labs(
+    title = "Model 1: Residuals vs. Fitted Values", 
+    y = "Residual",
+    x = "Fitted Value")
 ```
 
-Comparing Model 1 to two additional models.
+Comparing Model 1 to two additional models using cross-validation.
 
 * Model 2: Main Effects only (length at birth and gestational age)
 
 * Model 3: Interaction model (head circumference, length, sex + 3-way interaction)
 
 ```{r}
-fit_m2 = lm(bwt ~ blength + gaweeks, data = bw_df)
+library(modelr)
+library(purrr)
 
-fit_m2 %>% 
-  broom::tidy()
+cv_df = 
+  crossv_mc(bw_df, 100, test = .2) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
 
-fit_m3 = lm(bwt ~ bhead * blength * babysex, data = bw_df)
+cv_df = 
+  cv_df %>% 
+  mutate(
+    m1 = map(lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks + momage + mrace + ppbmi + smoken + wtgain, data = bw_df, data = train)), 
+    m2 = map(lm(bwt ~ blength + gaweeks, data = train)), 
+    m3 = map(lm(bwt ~ bhead * blength * babysex, data = train))
+  ) %>% 
+  mutate(
+    rmse_m1 = map2_dbl(.x = m1, .y = test, ~rmse(model = .x, data = .y)), 
+    rmse_m2 = map2_dbl(.x = m2, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_m3 = map2_dbl(.x = m3, .y = test, ~rmse(model = .x, data = .y)),
+  )
 
-fit_m3 %>% 
-  broom::tidy()
+cv_df %>% 
+  select(.id, starts_with("rmse")) %>% 
+  pivot_longer(
+    rmse_m1:rmse_m3,
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) %>% 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_boxplot()
 ```
 
 ## Problem 2 - Bootstrapping Central Park Weather Data
