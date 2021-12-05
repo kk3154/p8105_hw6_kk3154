@@ -105,18 +105,18 @@ library(modelr)
 library(purrr)
 
 cv_df = 
-  crossv_mc(bw_df, 100, test = .2) %>% 
+  crossv_mc(bw_df, 100, test = .2, id = ".id") %>% 
   mutate(
     train = map(train, as_tibble),
     test = map(test, as_tibble)
   )
 
-cv_df = 
+cv_df2 = 
   cv_df %>% 
   mutate(
-    m1 = map(lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks + momage + mrace + ppbmi + smoken + wtgain, data = bw_df, data = train)), 
-    m2 = map(lm(bwt ~ blength + gaweeks, data = train)), 
-    m3 = map(lm(bwt ~ bhead * blength * babysex, data = train))
+    m1 = map(.x = train, ~lm(bwt ~ babysex + bhead + blength + delwt + fincome + frace + gaweeks + momage + mrace + ppbmi + smoken + wtgain, data = .x)), 
+    m2 = map(.x = train, ~lm(bwt ~ blength + gaweeks, data = .x)), 
+    m3 = map(.x = train, ~lm(bwt ~ bhead * blength * babysex, data = .x))
   ) %>% 
   mutate(
     rmse_m1 = map2_dbl(.x = m1, .y = test, ~rmse(model = .x, data = .y)), 
@@ -124,7 +124,7 @@ cv_df =
     rmse_m3 = map2_dbl(.x = m3, .y = test, ~rmse(model = .x, data = .y)),
   )
 
-cv_df %>% 
+cv_df2 %>% 
   select(.id, starts_with("rmse")) %>% 
   pivot_longer(
     rmse_m1:rmse_m3,
@@ -133,7 +133,7 @@ cv_df %>%
     names_prefix = "rmse_"
   ) %>% 
   ggplot(aes(x = model, y = rmse)) + 
-  geom_boxplot()
+  geom_violin()
 ```
 
 ## Problem 2 - Bootstrapping Central Park Weather Data
